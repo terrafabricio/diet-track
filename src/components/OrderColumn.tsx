@@ -1,4 +1,4 @@
-// src/components/OrderColumn.tsx
+// src/components/OrderColumn.tsx (Novo)
 
 import { OrderStatus } from '@/types/diet';
 import { useDroppable } from '@dnd-kit/core';
