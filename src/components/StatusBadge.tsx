@@ -1,42 +1,33 @@
-import { OrderStatus } from "@/types/diet";
-import { Badge } from "@/components/ui/badge";
-import { Clock, ChefHat, CheckCircle2, PackageCheck } from "lucide-react";
+// src/components/StatusBadge.tsx (Substituição Completa)
+
+import { OrderStatus } from '@/types/diet';
+import { cn } from '@/lib/utils';
+import { Badge } from '@/components/ui/badge';
 
 interface StatusBadgeProps {
-  status: OrderStatus;
+    status: OrderStatus;
 }
 
-const statusConfig = {
-  "Novo": {
-    icon: Clock,
-    className: "bg-status-new text-white",
-    label: "Novo"
-  },
-  "Em Preparo": {
-    icon: ChefHat,
-    className: "bg-status-preparing text-white",
-    label: "Em Preparo"
-  },
-  "Pronto": {
-    icon: PackageCheck,
-    className: "bg-status-ready text-white",
-    label: "Pronto"
-  },
-  "Entregue": {
-    icon: CheckCircle2,
-    className: "bg-status-delivered text-white",
-    label: "Entregue"
-  }
-};
+export default function StatusBadge({ status }: StatusBadgeProps) {
+    const statusTextMap: Record<OrderStatus, string> = {
+        novo: 'Novo',
+        em_preparo: 'Em Preparo',
+        pronto: 'Pronto',
+        entregue: 'Entregue',
+        cancelado: 'Cancelado',
+    };
 
-export const StatusBadge = ({ status }: StatusBadgeProps) => {
-  const config = statusConfig[status];
-  const Icon = config.icon;
+    const statusColorMap: Record<OrderStatus, string> = {
+        novo: 'bg-blue-500 text-white',
+        em_preparo: 'bg-yellow-500 text-black',
+        pronto: 'bg-green-500 text-white',
+        entregue: 'bg-gray-500 text-white',
+        cancelado: 'bg-red-500 text-white',
+    };
 
-  return (
-    <Badge className={`${config.className} gap-1.5`}>
-      <Icon className="h-3.5 w-3.5" />
-      {config.label}
-    </Badge>
-  );
-};
+    return (
+        <Badge className={cn('capitalize', statusColorMap[status])}>
+            {statusTextMap[status]}
+        </Badge>
+    );
+}
