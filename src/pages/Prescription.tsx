@@ -1,208 +1,134 @@
-import { useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { mockPatients } from "@/data/mockData";
-import { Patient, DietBase, DietModifier } from "@/types/diet";
-import { Search, User, MapPin, AlertCircle, ArrowLeft } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
-import { useNavigate } from "react-router-dom";
+// src/pages/Prescription.tsx (Substituição Completa)
 
-const Prescription = () => {
-  const [searchTerm, setSearchTerm] = useState("");
-  const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
-  const [dietBase, setDietBase] = useState<DietBase | "">("");
-  const [dietModifier, setDietModifier] = useState<DietModifier>("Nenhuma");
-  const [observations, setObservations] = useState("");
-  const { toast } = useToast();
-  const navigate = useNavigate();
+import { useEffect, useState } from 'react';
+// Importa o conector que criamos
+import { supabase } from '@/lib/supabaseClient';
+// Importa os componentes de UI que seu app usa (com os caminhos corretos)
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
+import { useToast } from '@/hooks/use-toast';
 
-  const filteredPatients = mockPatients.filter(p =>
-    p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    p.room.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+// ---
+// Definindo os tipos para os dados que virão do banco
+// ---
+interface Paciente {
+    id: number;
+    nome: string;
+    leito: string;
+}
+interface DietaBase {
+    id: number;
+    nome_dieta: string;
+}
+interface Modificador {
+    id: number;
+    nome_modificador: string;
+}
 
-  const handleSave = () => {
-    if (!selectedPatient || !dietBase) {
-      toast({
-        title: "Campos obrigatórios",
-        description: "Selecione um paciente e uma dieta base.",
-        variant: "destructive"
-      });
-      return;
+export function PrescriptionPage() {
+    const { toast } = useToast();
+    const [pacientes, setPacientes] = useState<Paciente[]>([]);
+    const [dietas, setDietas] = useState<DietaBase[]>([]);
+    const [modificadores, setModificadores] = useState<Modificador[]>([]);
+    
+    // ---
+    // Estados do Formulário (O que o usuário seleciona)
+    // ---
+    const [selectedPacienteId, setSelectedPacienteId] = useState<string | null>(null);
+    const [selectedDietaId, setSelectedDietaId] = useState<string | null>(null);
+    const [selectedModificadorId, setSelectedModificadorId] = useState<string | null>(null);
+    const [observacoes, setObservacoes] = useState('');
+    const [isSubmitting, setIsSubmitting] = useState(false);
+
+    // ---
+    // FUNÇÃO 1: Buscar os dados para preencher os Dropdowns
+    // ---
+    async function loadInitialData() {
+        // (Em um app real, os pacientes viriam do HIS ou filtro por setor)
+        // Por agora, vamos buscar todos
+        const { data: pacientesData, error: pacientesError } = await supabase
+            .from('Pacientes')
+            .select('*');
+        if (pacientesError) console.error('Erro ao buscar pacientes:', pacientesError);
+        else setPacientes(pacientesData || []);
+
+        // Busca as dietas-base que cadastramos
+        const { data: dietasData, error: dietasError } = await supabase
+            .from('DietasBase')
+            .select('*');
+        if (dietasError) console.error('Erro ao buscar dietas:', dietasError);
+        else setDietas(dietasData || []);
+
+        // Busca os modificadores que cadastramos
+        const { data: modificadoresData, error: modificadoresError } = await supabase
+            .from('Modificadores')
+            .select('*');
+        if (modificadoresError) console.error('Erro ao buscar modificadores:', modificadoresError);
+        else setModificadores(modificadoresData || []);
     }
 
-    toast({
-      title: "✅ Prescrição Salva!",
-      description: "A cozinha foi notificada em tempo real.",
-      className: "bg-success text-success-foreground"
-    });
+    // ---
+    // FUNÇÃO 2: Rodar a FUNÇÃO 1 quando a tela carregar
+    // ---
+    useEffect(() => {
+        loadInitialData();
+    }, []);
 
-    // Reset form
-    setSelectedPatient(null);
-    setDietBase("");
-    setDietModifier("Nenhuma");
-    setObservations("");
-  };
+    // ---
+    // FUNÇÃO 3: Salvar a Prescrição (O "Cérebro" do app)
+    // ---
+    async function handleSubmit(e: React.FormEvent) {
+        e.preventDefault();
+        if (!selectedPacienteId || !selectedDietaId) {
+            toast({ title: "Erro", description: "Paciente e Dieta Base são obrigatórios.", variant: "destructive" });
+            return;
+        }
+        setIsSubmitting(true);
 
-  return (
-    <div className="min-h-screen bg-background p-4 md:p-8">
-      <div className="max-w-6xl mx-auto space-y-6">
-        {/* Header */}
-        <div className="flex items-center gap-4">
-          <Button variant="outline" size="icon" onClick={() => navigate("/")}>
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
-          <div>
-            <h1 className="text-3xl font-bold">Prescrição de Dietas</h1>
-            <p className="text-muted-foreground">Selecione um paciente e prescreva a dieta</p>
-          </div>
-        </div>
+        // ---
+        // ETAPA A: Salvar a Prescrição (na Tabela 'Prescricoes')
+        // ---
+        const prescricaoParaSalvar = {
+            paciente_id: parseInt(selectedPacienteId),
+            dieta_base_id: parseInt(selectedDietaId),
+            // Converte 'null' ou o ID string para o formato do banco
+            modificador_id: selectedModificadorId ? parseInt(selectedModificadorId) : null,
+            observacoes: observacoes,
+            status_prescricao: 'ativa'
+        };
 
-        <div className="grid md:grid-cols-2 gap-6">
-          {/* Lista de Pacientes */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Meus Pacientes - Enfermaria A</CardTitle>
-              <div className="relative mt-4">
-                <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Buscar paciente ou leito..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-3 max-h-[600px] overflow-y-auto">
-              {filteredPatients.map((patient) => (
-                <Card
-                  key={patient.id}
-                  className={`cursor-pointer transition-all hover:shadow-md ${
-                    selectedPatient?.id === patient.id 
-                      ? "border-2 border-primary bg-primary/5" 
-                      : "border"
-                  }`}
-                  onClick={() => setSelectedPatient(patient)}
-                >
-                  <CardContent className="p-4">
-                    <div className="flex items-start justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        <User className="h-4 w-4 text-primary" />
-                        <span className="font-semibold">{patient.name}</span>
-                      </div>
-                      {!patient.currentDiet && (
-                        <AlertCircle className="h-4 w-4 text-warning" />
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
-                      <MapPin className="h-3 w-3" />
-                      <span>Leito: {patient.room}</span>
-                    </div>
-                    {patient.currentDiet ? (
-                      <div className="text-sm bg-secondary rounded px-2 py-1 inline-block">
-                        Dieta Atual: {patient.currentDiet}
-                      </div>
-                    ) : (
-                      <div className="text-sm text-warning font-medium">
-                        Nenhuma Prescrição Ativa
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              ))}
-            </CardContent>
-          </Card>
+        const { data: prescricaoData, error: prescricaoError } = await supabase
+            .from('Prescricoes')
+            .insert(prescricaoParaSalvar)
+            .select() // Pede ao Supabase para retornar o registro que acabou de ser criado
+            .single(); // Esperamos apenas um
 
-          {/* Formulário de Prescrição */}
-          <Card className={selectedPatient ? "" : "opacity-50"}>
-            <CardHeader>
-              <CardTitle>Prescrever Dieta</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              {selectedPatient ? (
-                <>
-                  {/* Info do Paciente */}
-                  <div className="bg-secondary/50 rounded-lg p-4 space-y-2">
-                    <div>
-                      <Label className="text-xs text-muted-foreground">Paciente</Label>
-                      <p className="font-semibold">{selectedPatient.name}</p>
-                    </div>
-                    <div>
-                      <Label className="text-xs text-muted-foreground">Leito</Label>
-                      <p className="font-semibold">{selectedPatient.room}</p>
-                    </div>
-                    <div>
-                      <Label className="text-xs text-muted-foreground">Alergias</Label>
-                      <p className="text-sm">{selectedPatient.allergies || "Nenhuma registrada"}</p>
-                    </div>
-                  </div>
+        if (prescricaoError || !prescricaoData) {
+            console.error('Erro ao salvar prescrição:', prescricaoError);
+            toast({ title: "Erro no Servidor", description: "Não foi possível salvar a prescrição.", variant: "destructive" });
+            setIsSubmitting(false);
+            return;
+        }
 
-                  {/* Formulário */}
-                  <div className="space-y-4">
-                    <div>
-                      <Label>1. Selecione a Consistência (Base) *</Label>
-                      <Select value={dietBase} onValueChange={(value) => setDietBase(value as DietBase)}>
-                        <SelectTrigger className="mt-2">
-                          <SelectValue placeholder="Escolha a dieta base" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="Livre">Dieta Livre</SelectItem>
-                          <SelectItem value="Branda">Dieta Branda</SelectItem>
-                          <SelectItem value="Pastosa">Dieta Pastosa</SelectItem>
-                          <SelectItem value="Líquida Completa">Dieta Líquida Completa</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
+        // ---
+        // ETAPA B: Criar os Pedidos (na Tabela 'PedidosProducao')
+        // ISSO É O QUE VAI FAZER "PIPOCAR" NO TELÃO!
+        // ---
+        const novaPrescricaoId = prescricaoData.id;
+        
+        // (Em um sistema completo, isso seria mais inteligente,
+        // mas para o MVP, vamos criar pedidos para Almoço e Jantar)
+        const pedidosParaCriar = [
+            { prescricao_id: novaPrescricaoId, refeicao: 'Almoço', status: 'novo' as const },
+            { prescricao_id: novaPrescricaoId, refeicao: 'Jantar', status: 'novo' as const }
+        ];
 
-                    <div>
-                      <Label>2. Selecione a Modificação (Terapêutica)</Label>
-                      <Select value={dietModifier} onValueChange={(value) => setDietModifier(value as DietModifier)}>
-                        <SelectTrigger className="mt-2">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="Nenhuma">Nenhuma</SelectItem>
-                          <SelectItem value="Hipossódica">Hipossódica</SelectItem>
-                          <SelectItem value="DM 1800 kcal">DM 1800 kcal</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
+        const { error: pedidosError } = await supabase
+            .from('PedidosProducao')
+            .insert(pedidosParaCriar);
 
-                    <div>
-                      <Label>3. Observações (Opcional)</Label>
-                      <Textarea
-                        placeholder="Ex: Paciente recusa mamão, preferência por maçã na sobremesa"
-                        value={observations}
-                        onChange={(e) => setObservations(e.target.value)}
-                        className="mt-2"
-                        rows={3}
-                      />
-                    </div>
-
-                    <Button 
-                      onClick={handleSave} 
-                      className="w-full bg-success hover:bg-success/90 text-lg py-6"
-                    >
-                      Salvar Prescrição Ativa
-                    </Button>
-                  </div>
-                </>
-              ) : (
-                <div className="text-center py-12 text-muted-foreground">
-                  <User className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                  <p>Selecione um paciente para começar</p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-export default Prescription;
+        if (pedidosError) {
+            console.error('Erro ao criar pedidos de produção:', pedidosError
