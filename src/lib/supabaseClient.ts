@@ -10,3 +10,19 @@ const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYm
 
 // 2. Este 'supabase' é o seu conector oficial com o banco.
 export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+// src/lib/supabaseClient.ts (Substituição Completa e Segura)
+
+import { createClient } from '@supabase/supabase-js'
+
+// 1. Lê as chaves das "Variáveis de Ambiente" (o "cofre secreto")
+// O 'VITE_' é necessário por causa do Vite
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
+
+// 2. Verifica se as chaves foram encontradas no "cofre"
+if (!supabaseUrl || !supabaseAnonKey) {
+    throw new Error("Chaves do Supabase (URL ou Anon Key) não foram encontradas nas Variáveis de Ambiente.")
+}
+
+// 3. Este 'supabase' é o seu conector oficial com o banco.
+export const supabase = createClient(supabaseUrl, supabaseAnonKey)
