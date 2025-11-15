@@ -1,257 +1,162 @@
-import { useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { OrderCard } from "@/components/OrderCard";
-import { mockOrders } from "@/data/mockData";
-import { Order } from "@/types/diet";
-import { ArrowLeft, RefreshCw } from "lucide-react";
-import { useNavigate } from "react-router-dom";
-import { useToast } from "@/hooks/use-toast";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+// src/pages/Production.tsx (Substituição Completa)
 
-const Production = () => {
-  const navigate = useNavigate();
-  const { toast } = useToast();
-  const [orders, setOrders] = useState(mockOrders);
-  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+import { useEffect, useState } from 'react';
+// Importa seus tipos originais
+import { Order, OrderStatus } from '@/types/diet';
+// Importa a "ponte" que criamos na Ação 1
+import { supabase } from '@/lib/supabaseClient';
+// Importa o "bloco de montar" que criamos na Ação 2
+import { OrderColumn } from '@/components/OrderColumn';
+// Importa os componentes visuais que você já tinha
+import OrderCard from '@/components/OrderCard';
+import { DndContext, DragEndEvent } from '@dnd-kit/core';
 
-  const newOrders = orders.filter(o => o.status === "Novo");
-  const preparingOrders = orders.filter(o => o.status === "Em Preparo");
-  const readyOrders = orders.filter(o => o.status === "Pronto");
+// Define as colunas do Kanban, alinhadas com o banco de dados
+const columns: OrderStatus[] = ['novo', 'em_preparo', 'pronto'];
 
-  const handleStartPreparation = (orderId: string) => {
-    setOrders(orders.map(o => 
-      o.id === orderId 
-        ? { ...o, status: "Em Preparo" as const, startedAt: new Date(), assignedTo: "Equipe 1" }
-        : o
-    ));
-    setSelectedOrder(null);
-    toast({
-      title: "Pedido iniciado",
-      description: "O pedido está em preparo.",
-    });
-  };
+export function ProductionPage() {
+    const [orders, setOrders] = useState<Order[]>([]);
+    const [loading, setLoading] = useState(true);
 
-  const handleMarkReady = (orderId: string) => {
-    setOrders(orders.map(o => 
-      o.id === orderId 
-        ? { ...o, status: "Pronto" as const, readyAt: new Date() }
-        : o
-    ));
-    setSelectedOrder(null);
-    toast({
-      title: "Pedido pronto!",
-      description: "A copeira foi notificada.",
-      className: "bg-success text-success-foreground"
-    });
-  };
+    // ---
+    // FUNÇÃO 1: Buscar os dados iniciais do Supabase
+    // ---
+    async function fetchOrders() {
+        setLoading(true);
+        
+        // Esta é a consulta ao banco de dados real
+        const { data, error } = await supabase
+            .from('PedidosProducao')
+            .select(`
+                id,
+                refeicao,
+                status,
+                criado_em,
+                Prescricoes (
+                    observacoes,
+                    Pacientes ( nome, leito ),
+                    DietasBase ( nome_dieta ),
+                    Modificadores ( nome_modificador )
+                )
+            `)
+            // Filtra para mostrar apenas pedidos ativos no Kanban
+            .in('status', ['novo', 'em_preparo', 'pronto'])
+            .order('criado_em', { ascending: false });
 
-  return (
-    <div className="min-h-screen bg-background p-4 md:p-8">
-      <div className="max-w-[1600px] mx-auto space-y-6">
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Button variant="outline" size="icon" onClick={() => navigate("/")}>
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
-            <div>
-              <h1 className="text-3xl font-bold">Painel de Produção</h1>
-              <p className="text-muted-foreground">Refeição: Jantar - 17:30h</p>
+        if (error) {
+            console.error('Erro ao buscar pedidos:', error.message);
+        } else if (data) {
+            // Converte os dados do banco (ex: "nome_dieta") para o formato do seu app (ex: "diet")
+            const formattedOrders: Order[] = data.map((item: any) => {
+                const presc = item.Prescricoes;
+                // Lógica para combinar nomes de dieta, ex: "Branda + Hipossódica"
+                const dieta = presc.Modificadores
+                    ? `${presc.DietasBase.nome_dieta} + ${presc.Modificadores.nome_modificador}`
+                    : presc.DietasBase.nome_dieta;
+                
+                return {
+                    id: item.id.toString(),
+                    patientName: presc.Pacientes.nome,
+                    bed: presc.Pacientes.leito,
+                    diet: dieta,
+                    meal: item.refeicao,
+                    status: item.status as OrderStatus,
+                    createdAt: new Date(item.criado_em),
+                    notes: presc.observacoes
+                };
+            });
+            setOrders(formattedOrders);
+        }
+        setLoading(false);
+    }
+
+    // ---
+    // FUNÇÃO 2: Lidar com o "Arrastar e Soltar" (Atualizar Status)
+    // ---
+    async function handleDragEnd(event: DragEndEvent) {
+        const { active, over } = event;
+
+        // Verifica se o card foi movido para uma coluna diferente
+        if (over && active.id !== over.id) {
+            const orderId = active.id.toString();
+            const newStatus = over.id as OrderStatus; // O ID da coluna é o novo status
+
+            // 1. Atualiza a tela (UI) imediatamente (Otimista)
+            setOrders((prevOrders) =>
+                prevOrders.map((order) =>
+                    order.id === orderId ? { ...order, status: newStatus } : order
+                )
+            );
+
+            // 2. Envia a atualização para o banco de dados Supabase
+            const { error } = await supabase
+                .from('PedidosProducao')
+                .update({ 
+                    status: newStatus, 
+                    atualizado_em: new Date().toISOString() 
+                })
+                .eq('id', parseInt(orderId));
+            
+            if (error) {
+                console.error('Erro ao atualizar status:', error);
+            }
+        }
+    }
+
+    // ---
+    // FUNÇÃO 3: Buscar dados iniciais E "Ouvir" o banco em Tempo Real (WebSockets)
+    // ---
+    useEffect(() => {
+        // 1. Busca os dados assim que a tela carrega
+        fetchOrders();
+
+        // 2. Esta é a mágica do WebSocket (O "pipocar" do pedido)
+        const channel = supabase
+            .channel('pedidos_producao_changes')
+            .on(
+                'postgres_changes',
+                { 
+                    event: 'INSERT', // "Ouvir" apenas novos pedidos (INSERT)
+                    schema: 'public', 
+                    table: 'PedidosProducao' // Na tabela que criamos
+                },
+                (payload) => {
+                    console.log('Novo pedido recebido!', payload.new);
+                    // Quando um novo pedido "pipocar", recarregamos a lista inteira
+                    fetchOrders();
+                }
+            )
+            .subscribe();
+
+        // 3. Limpa a "audição" quando o usuário sai da tela
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, []); // O [] vazio garante que isso rode apenas uma vez
+
+    // ---
+    // O RENDER (O que o usuário vê)
+    // ---
+    if (loading) {
+        return <div className="p-4 text-center">Carregando Telão da Cozinha...</div>;
+    }
+
+    // O JSX (visual) é idêntico ao seu código original, mas agora é alimentado por 'orders' do Supabase
+    return (
+        <DndContext onDragEnd={handleDragEnd}>
+            <div className="flex h-[calc(100vh-80px)] gap-4 p-4 overflow-x-auto">
+                {columns.map((status) => (
+                    <OrderColumn key={status} status={status}>
+                        {orders
+                            .filter((order) => order.status === status)
+                            .map((order) => (
+                                <OrderCard key={order.id} order={order} />
+                            ))}
+                    </OrderColumn>
+                ))}
             </div>
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <div className="h-3 w-3 bg-success rounded-full animate-pulse" />
-              Atualização em tempo real
-            </div>
-            <Button variant="outline" size="icon">
-              <RefreshCw className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
+        </DndContext>
+    );
+}
 
-        {/* Stats */}
-        <div className="flex gap-4">
-          <Card className="flex-1 border-status-new/30 bg-status-new/5">
-            <CardContent className="p-4 flex items-center justify-between">
-              <span className="font-medium">Pedidos Totais</span>
-              <span className="text-3xl font-bold text-status-new">{orders.length}</span>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Kanban Board */}
-        <div className="grid md:grid-cols-3 gap-6">
-          {/* Coluna NOVOS */}
-          <Card className="border-status-new/30">
-            <CardHeader className="bg-status-new/10">
-              <CardTitle className="flex items-center justify-between">
-                <span>Novos</span>
-                <span className="text-2xl font-bold text-status-new">{newOrders.length}</span>
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="pt-4 space-y-3 max-h-[800px] overflow-y-auto">
-              {newOrders.map((order) => (
-                <OrderCard
-                  key={order.id}
-                  order={order}
-                  onClick={() => setSelectedOrder(order)}
-                />
-              ))}
-              {newOrders.length === 0 && (
-                <p className="text-center text-muted-foreground py-8">
-                  Nenhum pedido novo
-                </p>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Coluna EM PREPARO */}
-          <Card className="border-status-preparing/30">
-            <CardHeader className="bg-status-preparing/10">
-              <CardTitle className="flex items-center justify-between">
-                <span>Em Preparo</span>
-                <span className="text-2xl font-bold text-status-preparing">{preparingOrders.length}</span>
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="pt-4 space-y-3 max-h-[800px] overflow-y-auto">
-              {preparingOrders.map((order) => (
-                <OrderCard
-                  key={order.id}
-                  order={order}
-                  onClick={() => setSelectedOrder(order)}
-                />
-              ))}
-              {preparingOrders.length === 0 && (
-                <p className="text-center text-muted-foreground py-8">
-                  Nenhum pedido em preparo
-                </p>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Coluna PRONTO */}
-          <Card className="border-status-ready/30">
-            <CardHeader className="bg-status-ready/10">
-              <CardTitle className="flex items-center justify-between">
-                <span>Pronto p/ Entrega</span>
-                <span className="text-2xl font-bold text-status-ready">{readyOrders.length}</span>
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="pt-4 space-y-3 max-h-[800px] overflow-y-auto">
-              {readyOrders.map((order) => (
-                <OrderCard
-                  key={order.id}
-                  order={order}
-                  onClick={() => setSelectedOrder(order)}
-                />
-              ))}
-              {readyOrders.length === 0 && (
-                <p className="text-center text-muted-foreground py-8">
-                  Nenhum pedido pronto
-                </p>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-
-      {/* Dialog de Detalhes */}
-      <Dialog open={!!selectedOrder} onOpenChange={() => setSelectedOrder(null)}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>Detalhes do Pedido #{selectedOrder?.id}</DialogTitle>
-            <DialogDescription>
-              Informações completas e composição da dieta
-            </DialogDescription>
-          </DialogHeader>
-          {selectedOrder && (
-            <div className="space-y-6">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label className="text-xs text-muted-foreground">Paciente</Label>
-                  <p className="font-semibold">{selectedOrder.patientName}</p>
-                </div>
-                <div>
-                  <Label className="text-xs text-muted-foreground">Leito</Label>
-                  <p className="font-semibold">{selectedOrder.room}</p>
-                </div>
-                <div>
-                  <Label className="text-xs text-muted-foreground">Setor</Label>
-                  <p className="font-semibold">{selectedOrder.sector}</p>
-                </div>
-                <div>
-                  <Label className="text-xs text-muted-foreground">Dieta</Label>
-                  <p className="font-semibold">{selectedOrder.diet}</p>
-                </div>
-              </div>
-
-              <Card className="bg-secondary/50">
-                <CardHeader>
-                  <CardTitle className="text-base">Composição da Dieta</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <div className="flex justify-between items-center p-2 bg-background rounded">
-                    <span>Arroz (papa)</span>
-                    <span className="text-muted-foreground">100g</span>
-                  </div>
-                  <div className="flex justify-between items-center p-2 bg-background rounded">
-                    <span>Feijão batido</span>
-                    <span className="text-muted-foreground">60g</span>
-                  </div>
-                  <div className="flex justify-between items-center p-2 bg-background rounded">
-                    <span>Prato Principal (carne/frango/peixe)</span>
-                    <span className="text-muted-foreground">100g</span>
-                  </div>
-                  <div className="flex justify-between items-center p-2 bg-background rounded">
-                    <span>Legumes (purê)</span>
-                    <span className="text-muted-foreground">80g</span>
-                  </div>
-                  <div className="flex justify-between items-center p-2 bg-background rounded">
-                    <span>Sobremesa (fruta macia)</span>
-                    <span className="text-muted-foreground">100g</span>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <div className="flex gap-3">
-                {selectedOrder.status === "Novo" && (
-                  <Button 
-                    onClick={() => handleStartPreparation(selectedOrder.id)}
-                    className="flex-1 bg-status-preparing hover:bg-status-preparing/90"
-                  >
-                    Iniciar Preparo
-                  </Button>
-                )}
-                {selectedOrder.status === "Em Preparo" && (
-                  <Button 
-                    onClick={() => handleMarkReady(selectedOrder.id)}
-                    className="flex-1 bg-status-ready hover:bg-status-ready/90"
-                  >
-                    Marcar como Pronto
-                  </Button>
-                )}
-                <Button variant="outline" onClick={() => setSelectedOrder(null)} className="flex-1">
-                  Fechar
-                </Button>
-              </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
-    </div>
-  );
-};
-
-const Label = ({ children, className }: { children: React.ReactNode; className?: string }) => (
-  <div className={className}>{children}</div>
-);
-
-export default Production;
+export default ProductionPage;
