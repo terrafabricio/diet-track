@@ -1,58 +1,58 @@
-import { Card, CardContent } from "@/components/ui/card";
-import { Order } from "@/types/diet";
-import { StatusBadge } from "./StatusBadge";
-import { MapPin, User, Clock } from "lucide-react";
-import { formatDistanceToNow } from "date-fns";
-import { ptBR } from "date-fns/locale";
+// src/components/OrderCard.tsx (Substituição Completa)
+
+import { Order } from '@/types/diet';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import StatusBadge from '@/components/StatusBadge';
+import { useDraggable } from '@dnd-kit/core';
+import { Button } from '@/components/ui/button';
+import { GripVertical } from 'lucide-react';
 
 interface OrderCardProps {
-  order: Order;
-  onClick?: () => void;
+    order: Order;
 }
 
-export const OrderCard = ({ order, onClick }: OrderCardProps) => {
-  const timeAgo = formatDistanceToNow(order.createdAt, { 
-    addSuffix: true,
-    locale: ptBR 
-  });
+export default function OrderCard({ order }: OrderCardProps) {
+    const { attributes, listeners, setNodeRef, transform } = useDraggable({
+        id: order.id,
+    });
 
-  return (
-    <Card 
-      className="cursor-pointer transition-all hover:shadow-md hover:scale-[1.02] border-2"
-      onClick={onClick}
-    >
-      <CardContent className="p-4">
-        <div className="flex items-start justify-between mb-3">
-          <div className="flex items-center gap-2">
-            <MapPin className="h-4 w-4 text-primary" />
-            <span className="font-bold text-lg">{order.room}</span>
-            <span className="text-sm text-muted-foreground">({order.sector})</span>
-          </div>
-          <StatusBadge status={order.status} />
-        </div>
+    const style = transform
+        ? {
+              transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`,
+          }
+        : undefined;
 
-        <div className="space-y-2">
-          <div className="flex items-center gap-2">
-            <User className="h-4 w-4 text-muted-foreground" />
-            <span className="font-medium">{order.patientName}</span>
-          </div>
-          
-          <div className="bg-primary/10 rounded-md p-2">
-            <p className="text-sm font-semibold text-primary">{order.diet}</p>
-          </div>
-
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <Clock className="h-3 w-3" />
-            <span>{timeAgo}</span>
-          </div>
-
-          {order.assignedTo && (
-            <p className="text-xs text-muted-foreground">
-              Responsável: {order.assignedTo}
-            </p>
-          )}
-        </div>
-      </CardContent>
-    </Card>
-  );
-};
+    return (
+        <Card
+            ref={setNodeRef}
+            style={style}
+            className="mb-4 relative group"
+        >
+            <Button
+                variant="ghost"
+                size="icon"
+                className="absolute top-2 right-2 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab"
+                {...listeners}
+                {...attributes}
+            >
+                <GripVertical className="h-4 w-4" />
+            </Button>
+            <CardHeader className="pb-2">
+                <CardTitle className="text-base font-semibold flex justify-between items-center">
+                    <span>{order.patientName}</span>
+                    <StatusBadge status={order.status} />
+                </CardTitle>
+                <p className="text-sm text-muted-foreground">Leito {order.bed}</p>
+            </CardHeader>
+            <CardContent>
+                <p className="font-medium">{order.diet}</p>
+                <p className="text-sm text-muted-foreground">{order.meal}</p>
+                {order.notes && (
+                    <p className="text-sm mt-2 pt-2 border-t">
+                        <span className="font-semibold">Obs:</span> {order.notes}
+                    </p>
+                )}
+            </CardContent>
+        </Card>
+    );
+}
