@@ -131,4 +131,116 @@ export function PrescriptionPage() {
             .insert(pedidosParaCriar);
 
         if (pedidosError) {
-            console.error('Erro ao criar pedidos de produção:', pedidosError
+            console.error('Erro ao criar pedidos de produção:', pedidosError);
+            toast({ title: "Erro no Servidor", description: "Prescrição salva, mas falhou ao enviar para a cozinha.", variant: "destructive" });
+        } else {
+            toast({ title: "Sucesso!", description: "Prescrição salva e enviada para a produção." });
+        }
+
+        // Limpa o formulário
+        setSelectedPacienteId(null);
+        setSelectedDietaId(null);
+        setSelectedModificadorId(null);
+        setObservacoes('');
+        setIsSubmitting(false);
+    }
+
+    // ---
+    // O RENDER (O que o usuário vê)
+    // ---
+    return (
+        <div className="p-4">
+            <Card className="max-w-2xl mx-auto">
+                <CardHeader>
+                    <CardTitle>Nova Prescrição de Dieta</CardTitle>
+                </CardHeader>
+                <CardContent>
+                    <form onSubmit={handleSubmit} className="space-y-4">
+                        {/* --- Campo Paciente --- */}
+                        <div className="space-y-2">
+                            <Label htmlFor="paciente">Paciente</Label>
+                            <Select 
+                                value={selectedPacienteId || ''} 
+                                onValueChange={setSelectedPacienteId}
+                                disabled={isSubmitting}
+                            >
+                                <SelectTrigger id="paciente">
+                                    <SelectValue placeholder="Selecione um paciente..." />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {pacientes.map((p) => (
+                                        <SelectItem key={p.id} value={p.id.toString()}>
+                                            {p.leito} - {p.nome}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        {/* --- Campo Dieta Base --- */}
+                        <div className="space-y-2">
+                            <Label htmlFor="dieta-base">Dieta Base (Consistência)</Label>
+                            <Select 
+                                value={selectedDietaId || ''} 
+                                onValueChange={setSelectedDietaId}
+                                disabled={isSubmitting}
+                            >
+                                <SelectTrigger id="dieta-base">
+                                    <SelectValue placeholder="Selecione a dieta base..." />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {dietas.map((d) => (
+                                        <SelectItem key={d.id} value={d.id.toString()}>
+                                            {d.nome_dieta}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        {/* --- Campo Modificador --- */}
+                        <div className="space-y-2">
+                            <Label htmlFor="modificador">Modificador (Terapêutica)</Label>
+                            <Select 
+                                value={selectedModificadorId || ''} 
+                                onValueChange={(value) => setSelectedModificadorId(value === 'null' ? null : value)}
+                                disabled={isSubmitting}
+                            >
+                                <SelectTrigger id="modificador">
+                                    <SelectValue placeholder="Selecione (opcional)..." />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="null">Nenhum</SelectItem>
+                                    {modificadores.map((m) => (
+                                        <SelectItem key={m.id} value={m.id.toString()}>
+                                            {m.nome_modificador}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        {/* --- Campo Observações --- */}
+                        <div className="space-y-2">
+                            <Label htmlFor="observacoes">Observações</Label>
+                            <Textarea
+                                id="observacoes"
+                                placeholder="Ex: Paciente recusa mamão, preferência por maçã..."
+                                value={observacoes}
+                                onChange={(e) => setObservacoes(e.target.value)}
+                                disabled={isSubmitting}
+                            />
+                        </div>
+
+                        {/* --- Botão Salvar --- */}
+                        <Button type="submit" className="w-full" disabled={isSubmitting}>
+                            {isSubmitting ? "Salvando..." : "Salvar e Enviar para Produção"}
+                        </Button>
+                    </form>
+                </CardContent>
+            </Card>
+        </div>
+    );
+}
+
+export default PrescriptionPage;
