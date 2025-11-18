@@ -1,9 +1,7 @@
-// src/pages/Prescription.tsx (Substituição Completa)
+// src/pages/Prescription.tsx (Correção do Erro de Build)
 
 import { useEffect, useState } from 'react';
-// Importa o conector que criamos
 import { supabase } from '@/lib/supabaseClient';
-// Importa os componentes de UI que seu app usa (com os caminhos corretos)
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -11,9 +9,6 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 
-// ---
-// Definindo os tipos para os dados que virão do banco
-// ---
 interface Paciente {
     id: number;
     nome: string;
@@ -34,35 +29,25 @@ export function PrescriptionPage() {
     const [dietas, setDietas] = useState<DietaBase[]>([]);
     const [modificadores, setModificadores] = useState<Modificador[]>([]);
     
-    // ---
-    // Estados do Formulário (O que o usuário seleciona)
-    // ---
     const [selectedPacienteId, setSelectedPacienteId] = useState<string | null>(null);
     const [selectedDietaId, setSelectedDietaId] = useState<string | null>(null);
     const [selectedModificadorId, setSelectedModificadorId] = useState<string | null>(null);
     const [observacoes, setObservacoes] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
 
-    // ---
-    // FUNÇÃO 1: Buscar os dados para preencher os Dropdowns
-    // ---
     async function loadInitialData() {
-        // (Em um app real, os pacientes viriam do HIS ou filtro por setor)
-        // Por agora, vamos buscar todos
         const { data: pacientesData, error: pacientesError } = await supabase
             .from('Pacientes')
             .select('*');
         if (pacientesError) console.error('Erro ao buscar pacientes:', pacientesError);
         else setPacientes(pacientesData || []);
 
-        // Busca as dietas-base que cadastramos
         const { data: dietasData, error: dietasError } = await supabase
             .from('DietasBase')
             .select('*');
         if (dietasError) console.error('Erro ao buscar dietas:', dietasError);
         else setDietas(dietasData || []);
 
-        // Busca os modificadores que cadastramos
         const { data: modificadoresData, error: modificadoresError } = await supabase
             .from('Modificadores')
             .select('*');
@@ -70,16 +55,10 @@ export function PrescriptionPage() {
         else setModificadores(modificadoresData || []);
     }
 
-    // ---
-    // FUNÇÃO 2: Rodar a FUNÇÃO 1 quando a tela carregar
-    // ---
     useEffect(() => {
         loadInitialData();
     }, []);
 
-    // ---
-    // FUNÇÃO 3: Salvar a Prescrição (O "Cérebro" do app)
-    // ---
     async function handleSubmit(e: React.FormEvent) {
         e.preventDefault();
         if (!selectedPacienteId || !selectedDietaId) {
@@ -88,13 +67,9 @@ export function PrescriptionPage() {
         }
         setIsSubmitting(true);
 
-        // ---
-        // ETAPA A: Salvar a Prescrição (na Tabela 'Prescricoes')
-        // ---
         const prescricaoParaSalvar = {
             paciente_id: parseInt(selectedPacienteId),
             dieta_base_id: parseInt(selectedDietaId),
-            // Converte 'null' ou o ID string para o formato do banco
             modificador_id: selectedModificadorId ? parseInt(selectedModificadorId) : null,
             observacoes: observacoes,
             status_prescricao: 'ativa'
@@ -103,8 +78,8 @@ export function PrescriptionPage() {
         const { data: prescricaoData, error: prescricaoError } = await supabase
             .from('Prescricoes')
             .insert(prescricaoParaSalvar)
-            .select() // Pede ao Supabase para retornar o registro que acabou de ser criado
-            .single(); // Esperamos apenas um
+            .select()
+            .single();
 
         if (prescricaoError || !prescricaoData) {
             console.error('Erro ao salvar prescrição:', prescricaoError);
@@ -113,14 +88,9 @@ export function PrescriptionPage() {
             return;
         }
 
-        // ---
-        // ETAPA B: Criar os Pedidos (na Tabela 'PedidosProducao')
-        // ISSO É O QUE VAI FAZER "PIPOCAR" NO TELÃO!
-        // ---
-        const novaPrescricaoId = prescricaoData.id;
+        // AQUI ESTÁ A CORREÇÃO: Adicionamos "as any" para o Vercel não travar
+        const novaPrescricaoId = (prescricaoData as any).id;
         
-        // (Em um sistema completo, isso seria mais inteligente,
-        // mas para o MVP, vamos criar pedidos para Almoço e Jantar)
         const pedidosParaCriar = [
             { prescricao_id: novaPrescricaoId, refeicao: 'Almoço', status: 'novo' as const },
             { prescricao_id: novaPrescricaoId, refeicao: 'Jantar', status: 'novo' as const }
@@ -137,7 +107,6 @@ export function PrescriptionPage() {
             toast({ title: "Sucesso!", description: "Prescrição salva e enviada para a produção." });
         }
 
-        // Limpa o formulário
         setSelectedPacienteId(null);
         setSelectedDietaId(null);
         setSelectedModificadorId(null);
@@ -145,9 +114,6 @@ export function PrescriptionPage() {
         setIsSubmitting(false);
     }
 
-    // ---
-    // O RENDER (O que o usuário vê)
-    // ---
     return (
         <div className="p-4">
             <Card className="max-w-2xl mx-auto">
@@ -156,7 +122,6 @@ export function PrescriptionPage() {
                 </CardHeader>
                 <CardContent>
                     <form onSubmit={handleSubmit} className="space-y-4">
-                        {/* --- Campo Paciente --- */}
                         <div className="space-y-2">
                             <Label htmlFor="paciente">Paciente</Label>
                             <Select 
@@ -177,7 +142,6 @@ export function PrescriptionPage() {
                             </Select>
                         </div>
 
-                        {/* --- Campo Dieta Base --- */}
                         <div className="space-y-2">
                             <Label htmlFor="dieta-base">Dieta Base (Consistência)</Label>
                             <Select 
@@ -198,7 +162,6 @@ export function PrescriptionPage() {
                             </Select>
                         </div>
 
-                        {/* --- Campo Modificador --- */}
                         <div className="space-y-2">
                             <Label htmlFor="modificador">Modificador (Terapêutica)</Label>
                             <Select 
@@ -220,7 +183,6 @@ export function PrescriptionPage() {
                             </Select>
                         </div>
 
-                        {/* --- Campo Observações --- */}
                         <div className="space-y-2">
                             <Label htmlFor="observacoes">Observações</Label>
                             <Textarea
@@ -232,7 +194,6 @@ export function PrescriptionPage() {
                             />
                         </div>
 
-                        {/* --- Botão Salvar --- */}
                         <Button type="submit" className="w-full" disabled={isSubmitting}>
                             {isSubmitting ? "Salvando..." : "Salvar e Enviar para Produção"}
                         </Button>
