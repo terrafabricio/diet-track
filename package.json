@@ -1,4 +1,6 @@
 {
+  "@dnd-kit/core": "^6.1.0",
+    "@supabase/supabase-js": "^2.39.0",
   "name": "vite_react_shadcn_ts",
   "private": true,
   "version": "0.0.0",
