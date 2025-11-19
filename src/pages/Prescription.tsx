@@ -1,5 +1,3 @@
-// src/pages/Prescription.tsx (Correção do Erro de Build)
-
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { Button } from '@/components/ui/button';
@@ -67,139 +65,111 @@ export function PrescriptionPage() {
         }
         setIsSubmitting(true);
 
-        const prescricaoParaSalvar = {
-            paciente_id: parseInt(selectedPacienteId),
-            dieta_base_id: parseInt(selectedDietaId),
-            modificador_id: selectedModificadorId ? parseInt(selectedModificadorId) : null,
-            observacoes: observacoes,
-            status_prescricao: 'ativa'
-        };
+        try {
+            const prescricaoParaSalvar = {
+                paciente_id: parseInt(selectedPacienteId, 10),
+                dieta_base_id: parseInt(selectedDietaId, 10),
+                modificador_id: selectedModificadorId ? parseInt(selectedModificadorId, 10) : null,
+                observacoes: observacoes,
+                status_prescricao: 'ativa'
+            };
 
-        const { data: prescricaoData, error: prescricaoError } = await supabase
-            .from('Prescricoes')
-            .insert(prescricaoParaSalvar)
-            .select()
-            .single();
+            const { data: prescricaoData, error: prescricaoError } = await supabase
+                .from('Prescricoes')
+                .insert(prescricaoParaSalvar)
+                .select()
+                .single();
 
-        if (prescricaoError || !prescricaoData) {
-            console.error('Erro ao salvar prescrição:', prescricaoError);
-            toast({ title: "Erro no Servidor", description: "Não foi possível salvar a prescrição.", variant: "destructive" });
+            if (prescricaoError) {
+                console.error('Erro ao salvar prescrição:', prescricaoError);
+                toast({ title: "Erro", description: "Falha ao salvar prescrição.", variant: "destructive" });
+            } else {
+                // Criação dos pedidos no telão
+                const novaPrescricaoId = (prescricaoData as any).id;
+                const pedidosParaCriar = [
+                    { prescricao_id: novaPrescricaoId, refeicao: 'Almoço', status: 'novo' as const },
+                    { prescricao_id: novaPrescricaoId, refeicao: 'Jantar', status: 'novo' as const }
+                ];
+                await supabase.from('PedidosProducao').insert(pedidosParaCriar);
+
+                toast({ title: "Prescrição salva", description: "Prescrição registrada com sucesso.", variant: "default" });
+                setSelectedPacienteId(null);
+                setSelectedDietaId(null);
+                setSelectedModificadorId(null);
+                setObservacoes('');
+            }
+        } catch (err) {
+            console.error(err);
+            toast({ title: "Erro", description: "Erro inesperado ao salvar.", variant: "destructive" });
+        } finally {
             setIsSubmitting(false);
-            return;
         }
-
-        // AQUI ESTÁ A CORREÇÃO: Adicionamos "as any" para o Vercel não travar
-        const novaPrescricaoId = (prescricaoData as any).id;
-        
-        const pedidosParaCriar = [
-            { prescricao_id: novaPrescricaoId, refeicao: 'Almoço', status: 'novo' as const },
-            { prescricao_id: novaPrescricaoId, refeicao: 'Jantar', status: 'novo' as const }
-        ];
-
-        const { error: pedidosError } = await supabase
-            .from('PedidosProducao')
-            .insert(pedidosParaCriar);
-
-        if (pedidosError) {
-            console.error('Erro ao criar pedidos de produção:', pedidosError);
-            toast({ title: "Erro no Servidor", description: "Prescrição salva, mas falhou ao enviar para a cozinha.", variant: "destructive" });
-        } else {
-            toast({ title: "Sucesso!", description: "Prescrição salva e enviada para a produção." });
-        }
-
-        setSelectedPacienteId(null);
-        setSelectedDietaId(null);
-        setSelectedModificadorId(null);
-        setObservacoes('');
-        setIsSubmitting(false);
     }
 
     return (
-        <div className="p-4">
-            <Card className="max-w-2xl mx-auto">
-                <CardHeader>
-                    <CardTitle>Nova Prescrição de Dieta</CardTitle>
-                </CardHeader>
-                <CardContent>
-                    <form onSubmit={handleSubmit} className="space-y-4">
-                        <div className="space-y-2">
-                            <Label htmlFor="paciente">Paciente</Label>
-                            <Select 
-                                value={selectedPacienteId || ''} 
-                                onValueChange={setSelectedPacienteId}
-                                disabled={isSubmitting}
-                            >
-                                <SelectTrigger id="paciente">
-                                    <SelectValue placeholder="Selecione um paciente..." />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {pacientes.map((p) => (
-                                        <SelectItem key={p.id} value={p.id.toString()}>
-                                            {p.leito} - {p.nome}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
+        <div className="min-h-screen bg-background p-4 md:p-8">
+            <div className="max-w-3xl mx-auto space-y-6">
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Nova Prescrição</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <form onSubmit={handleSubmit} className="space-y-4">
+                            <div>
+                                <Label>Paciente</Label>
+                                <Select onValueChange={(v) => setSelectedPacienteId(v)} value={selectedPacienteId ?? undefined}>
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Selecione um paciente" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {pacientes.map(p => (
+                                            <SelectItem key={p.id} value={String(p.id)}>{p.nome} — {p.leito}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
 
-                        <div className="space-y-2">
-                            <Label htmlFor="dieta-base">Dieta Base (Consistência)</Label>
-                            <Select 
-                                value={selectedDietaId || ''} 
-                                onValueChange={setSelectedDietaId}
-                                disabled={isSubmitting}
-                            >
-                                <SelectTrigger id="dieta-base">
-                                    <SelectValue placeholder="Selecione a dieta base..." />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {dietas.map((d) => (
-                                        <SelectItem key={d.id} value={d.id.toString()}>
-                                            {d.nome_dieta}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
+                            <div>
+                                <Label>Dieta Base</Label>
+                                <Select onValueChange={(v) => setSelectedDietaId(v)} value={selectedDietaId ?? undefined}>
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Selecione a dieta base" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {dietas.map(d => (
+                                            <SelectItem key={d.id} value={String(d.id)}>{d.nome_dieta}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
 
-                        <div className="space-y-2">
-                            <Label htmlFor="modificador">Modificador (Terapêutica)</Label>
-                            <Select 
-                                value={selectedModificadorId || ''} 
-                                onValueChange={(value) => setSelectedModificadorId(value === 'null' ? null : value)}
-                                disabled={isSubmitting}
-                            >
-                                <SelectTrigger id="modificador">
-                                    <SelectValue placeholder="Selecione (opcional)..." />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="null">Nenhum</SelectItem>
-                                    {modificadores.map((m) => (
-                                        <SelectItem key={m.id} value={m.id.toString()}>
-                                            {m.nome_modificador}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
+                            <div>
+                                <Label>Modificador (opcional)</Label>
+                                <Select onValueChange={(v) => setSelectedModificadorId(v)} value={selectedModificadorId ?? undefined}>
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Selecione um modificador (opcional)" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="">Nenhum</SelectItem>
+                                        {modificadores.map(m => (
+                                            <SelectItem key={m.id} value={String(m.id)}>{m.nome_modificador}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
 
-                        <div className="space-y-2">
-                            <Label htmlFor="observacoes">Observações</Label>
-                            <Textarea
-                                id="observacoes"
-                                placeholder="Ex: Paciente recusa mamão, preferência por maçã..."
-                                value={observacoes}
-                                onChange={(e) => setObservacoes(e.target.value)}
-                                disabled={isSubmitting}
-                            />
-                        </div>
+                            <div>
+                                <Label>Observações</Label>
+                                <Textarea value={observacoes} onChange={(e) => setObservacoes(e.target.value)} />
+                            </div>
 
-                        <Button type="submit" className="w-full" disabled={isSubmitting}>
-                            {isSubmitting ? "Salvando..." : "Salvar e Enviar para Produção"}
-                        </Button>
-                    </form>
-                </CardContent>
-            </Card>
+                            <div className="flex items-center justify-end">
+                                <Button type="submit" disabled={isSubmitting}>{isSubmitting ? 'Enviando...' : 'Salvar Prescrição'}</Button>
+                            </div>
+                        </form>
+                    </CardContent>
+                </Card>
+            </div>
         </div>
     );
 }
