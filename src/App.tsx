@@ -2,11 +2,14 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
-import Dashboard from "./pages/Dashboard";
-import Prescription from "./pages/Prescription";
-import Production from "./pages/Production";
-import Delivery from "./pages/Delivery";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { AppLayout } from "./components/AppLayout";
+import Login from "./pages/Login";
+import AppDashboard from "./pages/AppDashboard";
+import ReceberNF from "./pages/ReceberNF";
+import ImportarAF from "./pages/ImportarAF";
+import Confrontar from "./pages/Confrontar";
+import Relatorios from "./pages/Relatorios";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -18,11 +21,13 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <Routes>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/prescricao" element={<Prescription />} />
-          <Route path="/producao" element={<Production />} />
-          <Route path="/entrega" element={<Delivery />} />
-          {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+          <Route path="/login" element={<Login />} />
+          <Route path="/app" element={<AppLayout><AppDashboard /></AppLayout>} />
+          <Route path="/app/receber" element={<AppLayout><ReceberNF /></AppLayout>} />
+          <Route path="/app/importar-af" element={<AppLayout><ImportarAF /></AppLayout>} />
+          <Route path="/app/confrontar" element={<AppLayout><Confrontar /></AppLayout>} />
+          <Route path="/app/relatorios" element={<AppLayout><Relatorios /></AppLayout>} />
+          <Route path="/" element={<Navigate to="/app" replace />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
